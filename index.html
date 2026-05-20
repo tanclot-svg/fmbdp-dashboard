@@ -145,7 +145,7 @@ body.sb-off #list-container{left:0;}
 #gantt-container{position:fixed;top:calc(var(--topbar-h) + var(--kpi-h));left:var(--sidebar-w);right:0;bottom:0;z-index:800;display:none;flex-direction:column;background:var(--bg);transition:left .25s ease;overflow:hidden;}
 body.sb-off #gantt-container{left:0;}
 #gantt-container.active{display:flex;}
-#gantt-scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;}#gantt-inner{min-width:max-content;display:flex;flex-direction:column;}
+#gantt-scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding-bottom:60px;}#gantt-inner{min-width:max-content;display:flex;flex-direction:column;}
 #gantt-scroll::-webkit-scrollbar{width:5px;height:5px;}
 #gantt-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 .g-header{display:flex;height:36px;align-items:stretch;position:sticky;top:0;z-index:10;background:var(--bg2);border-bottom:1px solid var(--border2);min-width:max-content;}
@@ -2535,6 +2535,7 @@ function logDelivery(bid,depot){
   deliveryLog.push(entry);
   saveDL();
   if(gsUser&&_accessToken)gsAppendDelivery(entry).catch(()=>gsPushAllDeliveries().catch(()=>{}));
+  if(currentView==='planning')renderPlanning();
 }
 async function gsAppendDelivery(e){await sheetsAppend(SHEETS.deliveries,[[e.id,e.bid,e.depot,e.date,e.items,e.note||'',e.ts]]);setSyncStatus('✓ '+new Date().toLocaleTimeString());}
 
@@ -2578,10 +2579,10 @@ function renderGantt(){
     const pLc=Math.max(0,Math.min(100,pL)).toFixed(2);
     const pRc=Math.max(0,Math.min(100,pR)).toFixed(2);
     const prog=getProg(b);
-    return `<div style="display:flex;height:24px;align-items:center;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;" onclick="map.setView([${b.Lat},${b.Lng}],14);setView('map',null);">
+    return `<div style="display:flex;height:32px;align-items:center;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;" onclick="map.setView([${b.Lat},${b.Lng}],14);setView('map',null);">
       <div style="width:${nameW}px;flex-shrink:0;font-family:var(--font-mono);font-size:10px;color:${textColor};padding:0 8px 0 12px;overflow:hidden;white-space:nowrap;">#${b.BridgeID}<span style="color:#374151;font-size:9px;margin-left:4px;">${b.Depot.slice(0,3)}</span>${isLate(b)?'<span style="color:#ef4444;margin-left:3px;">⚠</span>':''}</div>
       <div style="position:relative;flex:1;height:100%;background:rgba(255,255,255,.02);">
-        <div style="position:absolute;left:${pLc}%;right:${pRc}%;top:5px;bottom:5px;background:${barColor};border-radius:2px;opacity:.85;min-width:2px;">
+        <div style="position:absolute;left:${pLc}%;right:${pRc}%;top:4px;bottom:4px;background:${barColor};border-radius:2px;opacity:.85;min-width:2px;">
           <div style="position:absolute;left:0;top:0;bottom:0;width:${prog}%;background:rgba(255,255,255,.3);border-radius:2px;"></div>
         </div>
         <div style="position:absolute;left:${todayPct.toFixed(2)}%;top:0;bottom:0;width:1px;background:#3b82f6;opacity:.6;z-index:2;"></div>
@@ -2589,7 +2590,7 @@ function renderGantt(){
     </div>`;
   }).join('');
 
-  inner.innerHTML=`<div style="display:flex;height:24px;align-items:stretch;border-bottom:2px solid rgba(255,255,255,.1);">
+  inner.innerHTML=`<div style="display:flex;height:28px;align-items:stretch;border-bottom:2px solid rgba(255,255,255,.1);">
     <div style="width:${nameW}px;flex-shrink:0;font-family:var(--font-mono);font-size:9px;color:#374151;padding-left:12px;display:flex;align-items:center;letter-spacing:.08em;">BRIDGE</div>
     <div style="position:relative;flex:1;overflow:hidden;">${months}</div>
   </div>${rows}`;
@@ -2658,8 +2659,6 @@ function renderPlanning(){
         +'<span style="margin-left:auto;font-size:10px;font-family:var(--font-mono);color:var(--text3);">'+getStart(b)+' → '+getEndD(b)+'</span>'
         +'</div>'
         +'<div style="display:flex;gap:6px;align-items:center;">'
-        +'<div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;"><div style="height:100%;background:var(--green);width:'+prog+'%;border-radius:3px;"></div></div>'
-        +'<span style="font-family:var(--font-mono);font-size:10px;color:var(--green);">'+prog+'%</span>'
         +(stockOk
           ?'<button onclick="sendBridgeToSite(this)" data-bid="'+b.BridgeID+'" data-depot="'+depot_b+'" style="padding:3px 10px;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:3px;font-family:var(--font-mono);font-size:10px;cursor:pointer;">🚚 Send</button>'
           :'<span style="font-family:var(--font-mono);font-size:10px;color:#ef4444;padding:2px 8px;background:rgba(239,68,68,.1);border-radius:3px;">⚠ Stock</span>')
@@ -3409,6 +3408,32 @@ function exportStock(){
   const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');
   a.href=URL.createObjectURL(b);a.download='stock_'+depot+'_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
   showToast('Exported '+mvts.length+' movements');
+}
+
+
+// ── Site Tab Management ──
+function switchSiteTab(tab){
+  _currentSiteTab=tab;
+  ['report-list','ncr-list','incident-list','hse-list','punch-list','induction-list'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display='none';
+  });
+  const map2={reports:'report-list',ncr:'ncr-list',incident:'incident-list',hse:'hse-list',punch:'punch-list',induction:'induction-list'};
+  const target=document.getElementById(map2[tab]);
+  if(target)target.style.display='flex';
+  document.getElementById('report-form').style.display='none';
+  const colors={reports:'#3b82f6',ncr:'#f59e0b',incident:'#ef4444',hse:'#22d3ee',punch:'#a78bfa',induction:'#34d399'};
+  ['reports','ncr','incident','hse','punch','induction'].forEach(t=>{
+    const btn=document.getElementById('tab-'+t);
+    if(!btn)return;
+    if(t===tab){btn.style.background=colors[t];btn.style.color='#fff';}
+    else{btn.style.background='var(--bg3)';btn.style.color='var(--text3)';}
+  });
+  if(tab==='reports')renderReports();
+  else if(tab==='ncr')renderNCR();
+  else if(tab==='incident')renderIncidents();
+  else if(tab==='hse')renderHSE();
+  else if(tab==='punch')renderPunchList();
+  else if(tab==='induction')renderInductions();
 }
 
 // ═══════════════════════════════════════════════
